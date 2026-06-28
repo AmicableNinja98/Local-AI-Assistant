@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS usuario (
 );
 
 INSERT IGNORE INTO usuario (clave, valor) VALUES ('nombre_usuario', 'AmicableNinja98');
+INSERT IGNORE INTO usuario (clave,valor) VALUES ('nombre_asistente','Alfred')
 
 CREATE TABLE IF NOT EXISTS jugadores (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -43,4 +44,10 @@ CREATE TABLE IF NOT EXISTS torneo_equipos (
     PRIMARY KEY (torneo_id, equipo_id),
     FOREIGN KEY (torneo_id) REFERENCES torneos(id) ON DELETE CASCADE,
     FOREIGN KEY (equipo_id) REFERENCES equipos(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS aplicaciones (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL UNIQUE,
+    ruta VARCHAR(500) NOT NULL
 );

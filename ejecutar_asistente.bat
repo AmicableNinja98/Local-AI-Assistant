@@ -4,7 +4,9 @@ title Asistente IA Local
 :: -----------------------------------------------
 :: CONFIGURACIÓN — cambia estas rutas si es necesario
 :: -----------------------------------------------
+set RUTA_PROYECTO=C:\dev\python\asistente_ia
 set RUTA_PYTHON=C:\dev\python\asistente_ia\venv\Scripts\python.exe
 set RUTA_ASISTENTE=C:\dev\python\asistente_ia\frontend\cli.py
 
+cd /d "%RUTA_PROYECTO%"
 "%RUTA_PYTHON%" "%RUTA_ASISTENTE%"

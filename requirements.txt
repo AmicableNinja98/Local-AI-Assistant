@@ -1,5 +1,7 @@
 openai
-duckduckgo_search
+ddgs
 mysql-connector-python
 psutil
 python-dotenv
+requests
+beautifulsoup4
