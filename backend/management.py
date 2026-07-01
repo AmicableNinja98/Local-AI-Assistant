@@ -65,19 +65,135 @@ def inscribir_equipo_en_torneo(nombre_equipo, nombre_torneo):
     try:
         conn = _db()
         cur = conn.cursor()
-        cur.execute("SELECT id FROM equipos WHERE nombre LIKE %s", (f"%{nombre_equipo}%",))
+        cur.execute("SELECT id, nombre FROM equipos WHERE LOWER(nombre) LIKE LOWER(%s) LIMIT 1", (f"%{nombre_equipo}%",))
         e = cur.fetchone()
-        cur.execute("SELECT id FROM torneos WHERE nombre LIKE %s", (f"%{nombre_torneo}%",))
+        cur.execute("SELECT id FROM torneos WHERE LOWER(nombre) LIKE LOWER(%s) LIMIT 1", (f"%{nombre_torneo}%",))
         t = cur.fetchone()
         if not e:
+            cur.close(); conn.close()
             return f"No existe el equipo '{nombre_equipo}'."
         if not t:
+            cur.close(); conn.close()
             return f"No existe el torneo '{nombre_torneo}'."
-        cur.execute("INSERT INTO torneo_equipos (torneo_id, equipo_id) VALUES (%s, %s)", (t[0], e[0]))
+
+        equipo_id  = e[0]
+        equipo_nombre = e[1]
+        torneo_id  = t[0]
+
+        # Inscribe the team
+        cur.execute("INSERT IGNORE INTO torneo_equipos (torneo_id, equipo_id) VALUES (%s, %s)", (torneo_id, equipo_id))
+        cur.execute("INSERT IGNORE INTO estadisticas_equipo_torneo (torneo_id, equipo_id) VALUES (%s, %s)", (torneo_id, equipo_id))
+
+        # Auto-inscribe all players belonging to this team
+        cur.execute("SELECT jugador_id FROM equipo_jugadores WHERE equipo_id = %s", (equipo_id,))
+        jugadores = cur.fetchall()
+        for (jugador_id,) in jugadores:
+            cur.execute("""
+                INSERT IGNORE INTO estadisticas_jugador_torneo
+                    (torneo_id, jugador_id, equipo_id)
+                VALUES (%s, %s, %s)
+            """, (torneo_id, jugador_id, equipo_id))
+
         conn.commit()
-        cur.close()
-        conn.close()
-        return f"Equipo '{nombre_equipo}' inscrito en '{nombre_torneo}'."
+        cur.close(); conn.close()
+
+        if jugadores:
+            return (f"Equipo '{equipo_nombre}' inscrito en '{nombre_torneo}' "
+                    f"junto con sus {len(jugadores)} jugador(es).")
+        return f"Equipo '{equipo_nombre}' inscrito en '{nombre_torneo}' (sin jugadores asignados aún)."
+
+    except Exception as ex:
+        return f"Error: {ex}"
+
+
+def inscribir_multiples_equipos_en_torneo(nombre_torneo, excluir=None):
+    """
+    Inscribes all teams in the database into a tournament.
+    excluir: list of team name strings to skip (optional).
+    """
+    try:
+        excluir = [e.lower().strip() for e in excluir] if excluir else []
+
+        conn = _db()
+        cur = conn.cursor()
+
+        cur.execute("SELECT id FROM torneos WHERE LOWER(nombre) LIKE LOWER(%s) LIMIT 1", (f"%{nombre_torneo}%",))
+        t = cur.fetchone()
+        if not t:
+            cur.close(); conn.close()
+            return f"No existe el torneo '{nombre_torneo}'."
+        torneo_id = t[0]
+
+        cur.execute("SELECT id, nombre FROM equipos")
+        todos = cur.fetchall()
+        if not todos:
+            cur.close(); conn.close()
+            return "No hay equipos registrados en la base de datos."
+
+        inscritos = []
+        omitidos  = []
+
+        for equipo_id, equipo_nombre in todos:
+            # Check exclusion list with partial matching
+            if any(ex in equipo_nombre.lower() for ex in excluir):
+                omitidos.append(equipo_nombre)
+                continue
+
+            cur.execute("INSERT IGNORE INTO torneo_equipos (torneo_id, equipo_id) VALUES (%s, %s)", (torneo_id, equipo_id))
+            cur.execute("INSERT IGNORE INTO estadisticas_equipo_torneo (torneo_id, equipo_id) VALUES (%s, %s)", (torneo_id, equipo_id))
+
+            # Auto-inscribe players of this team
+            cur.execute("SELECT jugador_id FROM equipo_jugadores WHERE equipo_id = %s", (equipo_id,))
+            jugadores = cur.fetchall()
+            for (jugador_id,) in jugadores:
+                cur.execute("""
+                    INSERT IGNORE INTO estadisticas_jugador_torneo (torneo_id, jugador_id, equipo_id)
+                    VALUES (%s, %s, %s)
+                """, (torneo_id, jugador_id, equipo_id))
+
+            inscritos.append(equipo_nombre)
+
+        conn.commit()
+        cur.close(); conn.close()
+
+        lineas = [f"✅ {len(inscritos)} equipo(s) inscritos en '{nombre_torneo}':"]
+        for nombre in inscritos:
+            lineas.append(f"   • {nombre}")
+        if omitidos:
+            lineas.append(f"\n⏭️  Omitidos ({len(omitidos)}): {', '.join(omitidos)}")
+        return "\n".join(lineas)
+
+    except Exception as ex:
+        return f"Error: {ex}"
+
+
+def inscribir_jugador_en_torneo(nombre_jugador, nombre_torneo):
+    try:
+        conn = _db()
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM jugadores WHERE LOWER(nombre) LIKE LOWER(%s) LIMIT 1", (f"%{nombre_jugador}%",))
+        j = cur.fetchone()
+        cur.execute("SELECT id FROM torneos WHERE LOWER(nombre) LIKE LOWER(%s) LIMIT 1", (f"%{nombre_torneo}%",))
+        t = cur.fetchone()
+        if not j:
+            cur.close(); conn.close()
+            return f"No existe el jugador '{nombre_jugador}'."
+        if not t:
+            cur.close(); conn.close()
+            return f"No existe el torneo '{nombre_torneo}'."
+
+        equipo_id = None
+        cur.execute("SELECT equipo_id FROM equipo_jugadores WHERE jugador_id = %s LIMIT 1", (j[0],))
+        eq = cur.fetchone()
+        if eq:
+            equipo_id = eq[0]
+            cur.execute("INSERT IGNORE INTO torneo_equipos (torneo_id, equipo_id) VALUES (%s, %s)", (t[0], equipo_id))
+            cur.execute("INSERT IGNORE INTO estadisticas_equipo_torneo (torneo_id, equipo_id) VALUES (%s, %s)", (t[0], equipo_id))
+
+        cur.execute("INSERT IGNORE INTO estadisticas_jugador_torneo (torneo_id, jugador_id, equipo_id) VALUES (%s, %s, %s)", (t[0], j[0], equipo_id))
+        conn.commit()
+        cur.close(); conn.close()
+        return f"Jugador '{nombre_jugador}' registrado en '{nombre_torneo}'."
     except Exception as ex:
         return f"Error: {ex}"
 

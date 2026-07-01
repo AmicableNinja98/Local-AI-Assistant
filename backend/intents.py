@@ -6,6 +6,8 @@ from .management import (
     crear_equipo,
     crear_torneo,
     inscribir_equipo_en_torneo,
+    inscribir_jugador_en_torneo,
+    inscribir_multiples_equipos_en_torneo,
     registrar_jugador,
 )
 from .sports import (
@@ -67,6 +69,52 @@ def _extraer_resultado(texto):
     return (int(match.group(1)), int(match.group(2))) if match else None
 
 
+def _extraer_nombres_con_comillas(texto):
+    return re.findall(r'["“”](.+?)["“”]', texto)
+
+
+def _extraer_equipo_y_torneo(texto):
+    comillas = _extraer_nombres_con_comillas(texto)
+    if len(comillas) >= 2:
+        return comillas[0].strip(), comillas[1].strip()
+
+    # Strip leading verb and optional keywords
+    texto_limpio = re.sub(
+        r'^(?:registra|registrar|añade|añadir|agrega|agregar|add|inscribe|inscribir'
+        r'|apunta|assign|register|mete|meter|pon|poner)'
+        r'\s+(?:el|un|al|a|the|al equipo|el equipo|un equipo|a)?\s*(?:equipo|team)?\s+',
+        '', texto, flags=re.IGNORECASE
+    ).strip()
+
+    # Split on "en / in / al torneo / in the tournament"
+    m = re.search(
+        r'^(.+?)\s+(?:en el torneo|en|in the tournament|in|al torneo|al)\s+(.+)$',
+        texto_limpio, re.IGNORECASE
+    )
+    if m:
+        return m.group(1).strip().strip("\"'.,"), m.group(2).strip().strip("\"'.,")
+
+    return None, None
+
+
+def _extraer_jugador_y_torneo(texto):
+    comillas = _extraer_nombres_con_comillas(texto)
+    if len(comillas) >= 2:
+        return comillas[0].strip(), comillas[1].strip()
+
+    texto_limpio = re.sub(
+        r'^(?:registra|registrar|añade|añadir|agrega|add|inscribe|inscribir|apunta|assign|register)'
+        r'\s+(?:al|un|a|the)?\s*(?:jugador|player)?\s+',
+        '', texto, flags=re.IGNORECASE
+    ).strip()
+
+    m = re.search(r'^(.+?)\s+(?:en|in|al torneo|in the tournament)\s+(.+)$', texto_limpio, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().strip("\"'.,"), m.group(2).strip().strip("\"'.,")
+
+    return None, None
+
+
 def intentar_accion_deportiva(session, texto_usuario):
     t = texto_usuario.lower()
 
@@ -88,14 +136,73 @@ def intentar_accion_deportiva(session, texto_usuario):
         if not nombre:
             return {"tipo": "respuesta", "texto": "¿Cómo quieres llamar al equipo?", "herramienta": None, "terminado": False}
         return {"tipo": "herramienta", "texto": crear_equipo(nombre), "herramienta": "crear_equipo", "terminado": False}
+    
+    # ── Inscribir todos los equipos en torneo ───────────────────────────────
+    # Catches: "add all teams to World Cup Test"
+    #          "inscribe todos los equipos en World Cup Test"
+    #          "add all teams except Mexico and Canada to World Cup Test"
+    if any(f in t for f in ["todos los equipos", "all teams", "all the teams",
+                              "todos los equipos de la base", "all teams from"]):
 
-    if any(f in t for f in ["inscribe", "inscribir", "apunta"]) and ("torneo" in t or "en" in t):
-        comillas = re.findall(r'["“”](.+?)["“”]', texto_usuario)
-        if len(comillas) >= 2:
-            return {"tipo": "herramienta", "texto": inscribir_equipo_en_torneo(comillas[0], comillas[1]), "herramienta": "inscribir_equipo_en_torneo", "terminado": False}
-        m = re.search(r'(?:inscribe|inscribir|apunta)\s+(?:al?\s+)?["\']?(.+?)["\']?\s+en\s+["\']?(.+?)["\']?(?:\s|$)', texto_usuario, re.IGNORECASE)
-        if m:
-            return {"tipo": "herramienta", "texto": inscribir_equipo_en_torneo(m.group(1).strip(), m.group(2).strip()), "herramienta": "inscribir_equipo_en_torneo", "terminado": False}
+        # Extract tournament name
+        comillas = _extraer_nombres_con_comillas(texto_usuario)
+        m_torneo = re.search(
+            r'(?:en|in|to|al torneo|to the tournament)\s+["\']?([^"\']+?)["\']?'
+            r'(?:\s+except|\s+excepto|\s+menos|\s*$)',
+            texto_usuario, re.IGNORECASE
+        )
+        nombre_torneo = comillas[-1] if comillas else (m_torneo.group(1).strip() if m_torneo else None)
+
+        if not nombre_torneo:
+            return {"tipo": "respuesta",
+                    "texto": "¿A qué torneo quieres añadir todos los equipos?",
+                    "herramienta": None, "terminado": False}
+
+        # Extract exclusions after "except / excepto / menos"
+        excluir = []
+        m_excluir = re.search(
+            r'(?:except|excepto|menos|excluding|excluyendo)\s+(.+?)(?:\s+(?:en|in|to|al)\s+|$)',
+            texto_usuario, re.IGNORECASE
+        )
+        if m_excluir:
+            raw = m_excluir.group(1)
+            # Split on "and", "y", "," to get individual names
+            partes = re.split(r'\s*(?:,|and|y)\s*', raw, flags=re.IGNORECASE)
+            excluir = [p.strip().strip("\"'.,") for p in partes if p.strip()]
+
+        return {"tipo": "herramienta",
+                "texto": inscribir_multiples_equipos_en_torneo(nombre_torneo, excluir),
+                "herramienta": "inscribir_multiples_equipos_en_torneo", "terminado": False}
+
+    # ── Inscribir equipo en torneo ──────────────────────────────────────────
+    # Catches: "Inscribe Japon en World Cup Test"
+    #          "Añade España al torneo Liga 2026"
+    #          "Registra el equipo Brasil en World Cup"
+    if any(f in t for f in ["inscribe", "inscribir", "apunta", "mete", "meter",
+                             "pon ", "poner", "añade", "añadir", "agrega", "agregar",
+                             "registra", "registrar"]) \
+       and any(f in t for f in [" en ", " al ", " in ", " to "]) \
+       and not any(f in t for f in ["jugador", "player", "grupo", "group",
+                                    "partido", "resultado", "gol", "stats","todos","all"]):
+
+        nombre_equipo, nombre_torneo = _extraer_equipo_y_torneo(texto_usuario)
+        if nombre_equipo and nombre_torneo:
+            return {"tipo": "herramienta",
+                    "texto": inscribir_equipo_en_torneo(nombre_equipo, nombre_torneo),
+                    "herramienta": "inscribir_equipo_en_torneo", "terminado": False}
+
+    # ── Inscribir jugador en torneo ─────────────────────────────────────────
+    if any(f in t for f in ["inscribe", "inscribir", "apunta", "mete", "meter",
+                             "añade", "añadir", "agrega", "agregar",
+                             "registra", "registrar"]) \
+       and any(f in t for f in [" en ", " al ", " in ", " to "]) \
+       and any(f in t for f in ["jugador", "player"]):
+
+        nombre_jugador, nombre_torneo = _extraer_jugador_y_torneo(texto_usuario)
+        if nombre_jugador and nombre_torneo:
+            return {"tipo": "herramienta",
+                    "texto": inscribir_jugador_en_torneo(nombre_jugador, nombre_torneo),
+                    "herramienta": "inscribir_jugador_en_torneo", "terminado": False}
 
     if any(f in t for f in ["crea el grupo", "crea un grupo", "crear grupo", "nuevo grupo"]):
         comillas = re.findall(r'["“”](.+?)["“”]', texto_usuario)
@@ -117,16 +224,24 @@ def intentar_accion_deportiva(session, texto_usuario):
             nombre_torneo = comillas[1] if len(comillas) > 1 else m_torneo.group(1).strip()
             return {"tipo": "herramienta", "texto": añadir_equipo_a_grupo(nombre_equipo, nombre_grupo, nombre_torneo), "herramienta": "añadir_equipo_a_grupo", "terminado": False}
 
-    if any(f in t for f in ["registra al jugador", "registra jugador", "añade al jugador", "nuevo jugador"]):
+    if any(f in t for f in ["registra al jugador", "registra un jugador", "registra jugador", "añade al jugador", "añade un jugador", "agrega al jugador", "agrega un jugador", "inscribe al jugador", "inscribe un jugador", "nuevo jugador"]):
         nombre = _extraer_entre_comillas(texto_usuario)
         if not nombre:
-            m = re.search(r'jugador\s+["\']?([A-Za-z\s]+?)(?:["\']|de\s+\d|,|$)', texto_usuario, re.IGNORECASE)
-            nombre = m.group(1).strip() if m else None
+            nombre = re.sub(r'^(?:registra|añade|agrega|inscribe)\s+(?:al|un|a)?\s*jugador\s+', '', texto_usuario, flags=re.IGNORECASE).strip()
+            nombre = re.split(r'\s+(?:en|al|a)\s+(?:el\s+torneo\s+)?', nombre, maxsplit=1)[0].strip().strip("\"'.,")
         m_edad = re.search(r'(\d+)\s*años', texto_usuario, re.IGNORECASE)
         m_pos = re.search(r'(?:posicion|posición|juega de|es)\s+([A-Za-z]+)', texto_usuario, re.IGNORECASE)
         edad = int(m_edad.group(1)) if m_edad else None
         posicion = m_pos.group(1).strip() if m_pos else None
         if nombre:
+            if "torneo" in t:
+                nombre_jugador, nombre_torneo = _extraer_jugador_y_torneo(texto_usuario)
+                if nombre_jugador and nombre_torneo:
+                    return {"tipo": "herramienta", "texto": inscribir_jugador_en_torneo(nombre_jugador, nombre_torneo), "herramienta": "inscribir_jugador_en_torneo", "terminado": False}
+                m_torneo = re.search(r'(?:en|in|al torneo|al torneo de|del torneo|del torneo de)\s+["\']?([^"\']+?)(?:["\']|\s|$)', texto_usuario, re.IGNORECASE)
+                nombre_torneo = m_torneo.group(1).strip() if m_torneo else None
+                if nombre_torneo:
+                    return {"tipo": "herramienta", "texto": inscribir_jugador_en_torneo(nombre, nombre_torneo), "herramienta": "inscribir_jugador_en_torneo", "terminado": False}
             return {"tipo": "herramienta", "texto": registrar_jugador(nombre, edad, posicion), "herramienta": "registrar_jugador", "terminado": False}
 
     if any(f in t for f in ["programa el partido", "programa un partido", "programar partido", "partido entre"]):

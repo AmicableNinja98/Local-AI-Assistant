@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS estadisticas_equipo_torneo (
 CREATE TABLE IF NOT EXISTS estadisticas_jugador_torneo (
     torneo_id INT NOT NULL,
     jugador_id INT NOT NULL,
-    equipo_id INT NOT NULL,
+    equipo_id INT DEFAULT NULL,
     partidos_jugados INT DEFAULT 0,
     goles INT DEFAULT 0,
     asistencias INT DEFAULT 0,
