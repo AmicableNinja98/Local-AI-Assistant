@@ -55,6 +55,20 @@ CREATE TABLE IF NOT EXISTS grupos (
     UNIQUE (torneo_id, nombre)
 );
 
+CREATE TABLE IF NOT EXISTS eliminatorias (
+    id int AUTO_INCREMENT PRIMARY KEY,
+    torneo_id INT,
+    ronda VARCHAR(50) NOT NULL,
+    orden int,
+    equipo1_id int NOT NULL,
+    equipo2_id int NOT NULL,
+    partido_id int NOT NULL,
+    FOREIGN KEY (torneo_id) REFERENCES torneos(id) ON DELETE CASCADE,
+    FOREIGN KEY (equipo1_id) REFERENCES equipos(id),
+    FOREIGN KEY (equipo2_id) REFERENCES equipos(id),
+    FOREIGN KEY (partido_id) REFERENCES partidos(id)
+);
+
 -- Teams assigned to a group
 CREATE TABLE IF NOT EXISTS grupo_equipos (
     grupo_id INT NOT NULL,

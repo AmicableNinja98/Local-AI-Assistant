@@ -11,7 +11,7 @@ from .config import DB_CONFIG
 def _db():
     if mysql is None:
         raise RuntimeError("mysql-connector-python is not installed")
-    return mysql.connect(**DB_CONFIG)
+    return mysql.connect(**DB_CONFIG,consume_results = True)
 
 
 def obtener_nombre_usuario():

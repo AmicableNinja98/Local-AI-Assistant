@@ -198,6 +198,18 @@ def inscribir_jugador_en_torneo(nombre_jugador, nombre_torneo):
         return f"Error: {ex}"
 
 
+def inscribir_y_sortear(nombre_torneo, excluir=None):
+    """Inscribes all teams then immediately drafts them into groups."""
+    from .sports import realizar_sorteo_grupos
+
+    resultado_inscripcion = inscribir_multiples_equipos_en_torneo(nombre_torneo, excluir)
+    if resultado_inscripcion.startswith("No existe") or resultado_inscripcion.startswith("Error"):
+        return resultado_inscripcion
+
+    resultado_sorteo = realizar_sorteo_grupos(nombre_torneo)
+    return f"{resultado_inscripcion}\n\n{resultado_sorteo}"
+
+
 def listar_todo_lo_guardado():
     try:
         conn = _db()
