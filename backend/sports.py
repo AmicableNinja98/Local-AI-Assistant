@@ -206,15 +206,14 @@ def registrar_resultado(nombre_torneo: str, nombre_local: str, nombre_visitante:
         return f"Error al registrar resultado: {e}"
 
 
-def actualizar_partido_completo(nombre_torneo: str, nombre_local: str,
-                                 nombre_visitante: str, goles_local: int,
+def actualizar_partido_completo(nombre_torneo: str, nombre_local: str,nombre_visitante: str, goles_local: int,
                                  goles_visitante: int, goleadores: list = None,
                                  asistentes: list = None, fase: str = None) -> str:
+
     try:
         t_id = _obtener_id_torneo(nombre_torneo)
         l_id = _obtener_id_equipo(nombre_local)
         v_id = _obtener_id_equipo(nombre_visitante)
-
         if not t_id: return f"⚠️  No encontré el torneo '{nombre_torneo}'."
         if not l_id: return f"⚠️  No encontré el equipo '{nombre_local}'."
         if not v_id: return f"⚠️  No encontré el equipo '{nombre_visitante}'."
@@ -224,17 +223,13 @@ def actualizar_partido_completo(nombre_torneo: str, nombre_local: str,
         # ── VALIDATION 1: Check the match exists ───────────────────────────
         cur = conn.cursor(buffered=True)
         query = """
-            SELECT id, estado FROM partidos
-            WHERE torneo_id = %s
-              AND equipo_local_id = %s
-              AND equipo_visitante_id = %s
+            SELECT id FROM partidos WHERE torneo_id = %s AND equipo_local_id = %s AND equipo_visitante_id = %s
         """
         params = [t_id, l_id, v_id]
         if fase:
             query += " AND fase LIKE %s"
             params.append(f"%{fase}%")
-        # Prioritise unplayed matches — if both exist, update the pending one
-        query += " ORDER BY CASE WHEN estado = 'programado' THEN 0 ELSE 1 END, id DESC LIMIT 1"
+        query += " ORDER BY id DESC LIMIT 1"
 
         cur.execute(query, params)
         partido = cur.fetchone()
@@ -249,8 +244,6 @@ def actualizar_partido_completo(nombre_torneo: str, nombre_local: str,
                 f"Comprueba que los nombres de los equipos y la fase sean correctos.\n"
                 f"Puedes ver los partidos programados con: 'Ver partidos de {nombre_torneo}'"
             )
-
-        partido_id = partido[0]
 
         # ── VALIDATION 2: Resolve all player names before touching anything ─
         goleadores   = goleadores  or []
@@ -306,7 +299,7 @@ def actualizar_partido_completo(nombre_torneo: str, nombre_local: str,
             UPDATE partidos
             SET goles_local = %s, goles_visitante = %s, estado = 'jugado'
             WHERE id = %s
-        """, (goles_local, goles_visitante, partido_id))
+        """, (goles_local, goles_visitante, partido[0]))
         conn.commit()
         cur.close()
 

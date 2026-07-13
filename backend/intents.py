@@ -32,6 +32,11 @@ from .sports import (
     avanzar_eliminatorias,
     registrar_ganador_penaltis
 )
+from .sharing import (
+    iniciar_servidor_compartir,
+    detener_servidor_compartir,
+    estado_compartir,
+)
 from .web import buscar_en_internet, leer_pagina_web
 from .help import ayuda_asistente
 
@@ -503,6 +508,24 @@ def _handle_ranking_equipos(texto, t):
     return _r("herramienta", ver_ranking_equipos(nombre_torneo, top), "ver_ranking_equipos")
 
 
+def _handle_iniciar_compartir(texto, t):
+    # Check if user specified a folder
+    m = re.search(
+        r'(?:carpeta|folder|directorio|directory|desde|from)\s+["\']?([^"\']+?)["\']?(?:\s|$)',
+        texto, re.IGNORECASE
+    )
+    carpeta = m.group(1).strip() if m else None
+    return _r("herramienta", iniciar_servidor_compartir(carpeta), "iniciar_servidor_compartir")
+
+
+def _handle_detener_compartir(texto, t):
+    return _r("herramienta", detener_servidor_compartir(), "detener_servidor_compartir")
+
+
+def _handle_estado_compartir(texto, t):
+    return _r("herramienta", estado_compartir(), "estado_compartir")
+
+
 # ── Intent registry ────────────────────────────────────────────────────────────
 # Each entry: {"triggers": [...], "handler": fn}
 # Triggers are checked against t = texto.lower()
@@ -678,6 +701,25 @@ INTENT_REGISTRY = [
         "triggers": ["actualiza las stats", "actualiza stats", "añade goles",
                      "registra goles", "añade asistencias"],
         "handler":  _handle_actualizar_stats_jugador,
+    },
+
+    # ── File sharing ───────────────────────────────────────────────────────
+    {
+        "triggers": ["compartir archivos", "compartir ficheros", "iniciar compartir",
+                     "share files", "start sharing", "activar compartir",
+                     "servidor de archivos", "file server", "enviar archivos",
+                     "recibir archivos", "compartir carpeta"],
+        "handler": _handle_iniciar_compartir,
+    },
+    {
+        "triggers": ["detener compartir", "parar compartir", "stop sharing",
+                     "apagar servidor de archivos", "desactivar compartir"],
+        "handler": _handle_detener_compartir,
+    },
+    {
+        "triggers": ["estado compartir", "compartir activo", "sharing status",
+                     "está compartiendo", "esta compartiendo", "is sharing"],
+        "handler": _handle_estado_compartir,
     },
 
     # ── Draws ──────────────────────────────────────────────────────────────

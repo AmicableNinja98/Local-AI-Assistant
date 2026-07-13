@@ -22,6 +22,7 @@ def ayuda_asistente():
    · Jugadores: registrar goles, asistencias, tarjetas
    · Stats: ver tabla de goleadores y estadísticas
 6. ❓ Ayuda: escribe '/ayuda' o pregúntame qué puedo hacer.
+7. 🖥️ Compartir archivos con otros dispositivos de tu red local.
 ====================================================================
 Ejemplo de flujo Copa del Mundo:
   'Crea el torneo "World Cup 2026"'
