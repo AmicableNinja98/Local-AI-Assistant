@@ -9,7 +9,6 @@ No cloud. No subscriptions. No data leaving your machine.
 ![llama.cpp](https://img.shields.io/badge/llama.cpp-local%20LLM-green)
 ![MariaDB](https://img.shields.io/badge/MariaDB-database-orange?logo=mariadb)
 ![Flask](https://img.shields.io/badge/Flask-file%20sharing-lightgrey?logo=flask)
-![License](https://img.shields.io/badge/license-MIT-blue)
 
 </div>
 
